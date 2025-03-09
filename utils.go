@@ -169,6 +169,8 @@ func DataModelHandler(RV *instance.RobloxInstances) {
 						kill()
 						break Exit
 					}
+					time.Sleep(time.Second)
+					continue
 				}
 				DM := instance.NewInstance(realdm, RV)
 				switch DM.Name() {
