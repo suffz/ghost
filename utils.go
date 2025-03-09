@@ -5,11 +5,14 @@ import (
 	"main/packages/Memory/instance"
 	"main/packages/Memory/memory"
 	"main/packages/Memory/process_monitor"
+	"main/packages/Memory/taskschedular"
 	"main/packages/Memory/utils"
+	"os"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/jedib0t/go-pretty/table"
 	"github.com/shirou/gopsutil/process"
 	"golang.org/x/sys/windows"
 )
@@ -91,9 +94,9 @@ var SaveInstance = func(instances memory.Processes, mem *memory.Luna, ole bool) 
 		return nil
 	}
 
-	fmt.Printf("[%v] Fetched renderjob %v\n", instances.Pid, renderview)
-
 	if len(renderview) > 0 {
+
+		fmt.Printf("[%v] Fetched renderjob 0x%x\n", instances.Pid, renderview[0])
 
 		var New *instance.RobloxInstances = &instance.RobloxInstances{
 			Pid:     int64(instances.Pid),
@@ -117,6 +120,16 @@ var SaveInstance = func(instances memory.Processes, mem *memory.Luna, ole bool) 
 		}
 
 		Roblox = append(Roblox, New)
+
+		t := table.NewWriter()
+		t.SetOutputMirror(os.Stdout)
+		t.AppendHeader(table.Row{"#", "Name", "Address", "RTTI"})
+
+		for i, job := range taskschedular.GetTasks(New.Mem, taskschedular.GetSchedularFromRenderView(New.Mem, fakedm)) {
+			name, _ := memory.RTTIInformation(mem, job.Address)
+			t.AppendRow(table.Row{i + 1, job.Name, fmt.Sprintf("0x%x", job.Address), name})
+		}
+		t.Render()
 
 		go DataModelHandler(New)
 		return New
@@ -151,8 +164,11 @@ func DataModelHandler(RV *instance.RobloxInstances) {
 				rv, _ := RV.Mem.ReadPointer(uintptr(RV.Instances.RenderView) + uintptr(RV.Offsets.DataModelHolder))
 				realdm, _ := RV.Mem.ReadPointer(rv + uintptr(RV.Offsets.DataModel))
 				if rv == 0 && realdm == 0 {
-					kill()
-					break Exit
+					ok, _ := process_monitor.IsProcessWindowInTaskbar(uint32(RV.Pid), false)
+					if !ok {
+						kill()
+						break Exit
+					}
 				}
 				DM := instance.NewInstance(realdm, RV)
 				switch DM.Name() {
